@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panorama Atlas</title>
+
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg-0:#161615;
+  --bg-1:#1e1e1d;
+  --bg-2:#282827;
+  --bg-3:#333331;
+  --line:#3a3a38;
+  --text-0:#ece9e4;
+  --text-1:#a8a49c;
+  --text-2:#726e66;
+  --accent:#c1591f;
+  --accent-dim:#6e3413;
+  --accent-text:#ffd9bb;
+  --radius:3px;
+  --font-head:'Space Grotesk', sans-serif;
+  --font-body:'Inter', sans-serif;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-body);
+  background:var(--bg-0);
+  color:var(--text-0);
+  overflow:hidden;
+}
+button{font-family:inherit; cursor:pointer;}
+input,select{font-family:inherit;}
+
+/* ---------- Top bar ---------- */
+#topbar{
+  position:fixed; top:0; left:0; right:0; height:56px; z-index:900;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px;
+  background:rgba(22,22,21,0.92);
+  border-bottom:1px solid var(--line);
+  backdrop-filter:blur(6px);
+}
+.brand{
+  font-family:var(--font-head); font-weight:600; font-size:17px; letter-spacing:0.2px;
+  display:flex; align-items:center; gap:8px;
+}
+.brand .dot{width:8px; height:8px; border-radius:50%; background:var(--accent);}
+#nav{display:flex; gap:4px;}
+.nav-btn{
+  background:transparent; border:1px solid transparent; color:var(--text-1);
+  padding:7px 14px; border-radius:var(--radius); font-size:13.5px;
+  transition:background .15s, color .15s;
+}
+.nav-btn:hover{background:var(--bg-2); color:var(--text-0);}
+.nav-btn.active{color:var(--text-0); background:var(--bg-2); border-color:var(--line);}
+#top-right{display:flex; align-items:center; gap:8px;}
+.icon-btn{
+  width:34px; height:34px; border-radius:var(--radius); border:1px solid var(--line);
+  background:var(--bg-1); color:var(--text-1); display:flex; align-items:center; justify-content:center;
+  font-size:15px;
+}
+.icon-btn:hover{color:var(--text-0); border-color:var(--text-2);}
+
+/* ---------- Views ---------- */
+.view{position:fixed; top:56px; left:0; right:0; bottom:0; display:none;}
+.view.active{display:block;}
+
+/* ---------- Map view ---------- */
+#map{width:100%; height:100%; background:var(--bg-0);}
+.maplibregl-canvas-container, .maplibregl-map{background:var(--bg-0);}
+.maplibregl-ctrl-attrib{background:rgba(22,22,21,0.7) !important; color:var(--text-2) !important;}
+.maplibregl-ctrl-attrib a{color:var(--text-1) !important;}
+.maplibregl-popup-content{background:var(--bg-1); color:var(--text-0); border-radius:var(--radius); border:1px solid var(--line); padding:12px 14px;}
+.maplibregl-popup-tip{border-top-color:var(--bg-1) !important; border-bottom-color:var(--bg-1) !important;}
+.maplibregl-popup-close-button{color:var(--text-1); font-size:16px; padding:2px 6px;}
+
+#filterbar{
+  position:absolute; top:16px; left:16px; z-index:500;
+  background:rgba(30,30,29,0.94); border:1px solid var(--line); border-radius:var(--radius);
+  padding:12px 14px; display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap;
+  backdrop-filter:blur(6px);
+  max-width:calc(100% - 32px);
+}
+.filter-group{display:flex; flex-direction:column; gap:5px;}
+.filter-group label{font-size:11px; color:var(--text-1); letter-spacing:0.3px;}
+.filter-group input, .filter-group select{
+  background:var(--bg-0); border:1px solid var(--line); color:var(--text-0);
+  padding:6px 8px; border-radius:var(--radius); font-size:13px; width:110px;
+}
+.filter-group.years{flex-direction:row; align-items:flex-end; gap:8px;}
+.filter-group.years .yfield{display:flex; flex-direction:column; gap:5px;}
+.filter-group.years input{width:72px;}
+#country-select{width:170px;}
+#clear-filters{
+  background:transparent; border:1px solid var(--line); color:var(--text-1);
+  padding:7px 12px; border-radius:var(--radius); font-size:12.5px; height:32px;
+}
+#clear-filters:hover{color:var(--text-0); border-color:var(--text-2);}
+#result-count{font-size:11.5px; color:var(--text-2); align-self:center;}
+
+#layer-toggle{
+  position:absolute; bottom:22px; left:16px; z-index:500;
+  background:rgba(30,30,29,0.94); border:1px solid var(--line); border-radius:var(--radius);
+  display:flex; overflow:hidden; backdrop-filter:blur(6px);
+}
+#layer-toggle button{
+  background:transparent; border:none; color:var(--text-1); padding:9px 16px; font-size:12.5px;
+}
+#layer-toggle button.active{background:var(--accent); color:#1a1008; font-weight:600;}
+
+.geo-marker{
+  width:16px; height:16px; border-radius:50%; background:var(--accent);
+  border:2px solid #16160f; box-shadow:0 0 0 3px rgba(193,89,31,0.25);
+  cursor:pointer; transition:transform .12s;
+}
+.geo-marker:hover{transform:scale(1.25);}
+.geo-marker.hidden-marker{display:none;}
+
+.pop-title{font-family:var(--font-head); font-weight:600; font-size:14px; margin-bottom:2px;}
+.pop-meta{font-size:11.5px; color:var(--text-1); margin-bottom:8px;}
+.pop-open{background:var(--accent); color:#1a1008; border:none; padding:6px 12px; border-radius:var(--radius); font-size:12px; font-weight:600;}
+
+/* ---------- Panorama overlay ---------- */
+#pano-overlay{
+  position:fixed; inset:0; z-index:2000; background:#0c0c0b; display:none;
+}
+#pano-overlay.active{display:block;}
+#panorama{width:100%; height:100%;}
+#pano-close{
+  position:absolute; top:18px; right:18px; z-index:2100;
+  width:38px; height:38px; border-radius:50%; background:rgba(30,30,29,0.85);
+  border:1px solid var(--line); color:var(--text-0); font-size:18px; display:flex;
+  align-items:center; justify-content:center;
+}
+#pano-close:hover{background:var(--accent); color:#1a1008; border-color:var(--accent);}
+#pano-info{
+  position:absolute; bottom:18px; left:18px; z-index:2100;
+  background:rgba(30,30,29,0.85); border:1px solid var(--line); border-radius:var(--radius);
+  padding:10px 14px; max-width:320px;
+}
+#pano-info .t{font-family:var(--font-head); font-weight:600; font-size:14.5px;}
+#pano-info .m{font-size:11.5px; color:var(--text-1); margin-top:2px;}
+
+/* ---------- Donation view ---------- */
+#donation-view{overflow-y:auto;}
+.donation-wrap{max-width:640px; margin:0 auto; padding:64px 24px 80px;}
+.donation-wrap h1{font-family:var(--font-head); font-size:30px; font-weight:600; margin-bottom:16px;}
+.donation-wrap p{color:var(--text-1); line-height:1.7; font-size:14.5px; margin-bottom:14px;}
+.donation-wrap p[contenteditable="true"]{outline:1px dashed var(--accent-dim); padding:4px; border-radius:var(--radius);}
+.donate-methods{display:flex; flex-direction:column; gap:12px; margin-top:28px;}
+.method-card{
+  border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;
+  display:flex; justify-content:space-between; align-items:center; background:var(--bg-1);
+}
+.method-card .name{font-family:var(--font-head); font-weight:600; font-size:14.5px;}
+.method-card .val{font-size:13px; color:var(--text-1); margin-top:3px; font-family:monospace;}
+.copy-btn{background:transparent; border:1px solid var(--line); color:var(--text-1); padding:7px 12px; border-radius:var(--radius); font-size:12px;}
+.copy-btn:hover{border-color:var(--accent); color:var(--accent-text);}
+
+.newsletter-box{
+  margin-top:40px; border:1px solid var(--line); border-radius:var(--radius); padding:20px;
+  background:var(--bg-1);
+}
+.newsletter-box h3{font-family:var(--font-head); font-size:15px; margin-bottom:6px;}
+.newsletter-box p{font-size:13px; margin-bottom:12px;}
+.nl-row{display:flex; gap:8px;}
+.nl-row input{flex:1; background:var(--bg-0); border:1px solid var(--line); color:var(--text-0); padding:9px 11px; border-radius:var(--radius); font-size:13px;}
+.nl-row button{background:var(--accent); color:#1a1008; border:none; padding:9px 16px; border-radius:var(--radius); font-weight:600; font-size:13px;}
+.nl-status{font-size:12px; margin-top:8px; color:var(--accent-text); display:none;}
+
+/* ---------- Admin view ---------- */
+#admin-view{overflow-y:auto;}
+.admin-wrap{max-width:920px; margin:0 auto; padding:40px 24px 80px;}
+.admin-wrap h1{font-family:var(--font-head); font-size:24px; margin-bottom:6px;}
+.admin-wrap > p.sub{color:var(--text-2); font-size:13px; margin-bottom:28px;}
+.admin-section{border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-1); padding:20px; margin-bottom:20px;}
+.admin-section h2{font-family:var(--font-head); font-size:15px; margin-bottom:14px;}
+.upload-drop{
+  border:1.5px dashed var(--line); border-radius:var(--radius); padding:26px; text-align:center;
+  color:var(--text-1); font-size:13px; cursor:pointer;
+}
+.upload-drop:hover{border-color:var(--accent);}
+.exif-result{margin-top:14px; font-size:12.5px; color:var(--text-1); background:var(--bg-0); border:1px solid var(--line); border-radius:var(--radius); padding:12px; display:none;}
+.exif-result div{margin-bottom:4px;}
+.exif-result b{color:var(--text-0);}
+
+table.pano-table{width:100%; border-collapse:collapse; font-size:13px;}
+table.pano-table th{text-align:left; color:var(--text-2); font-weight:500; font-size:11.5px; padding:8px 10px; border-bottom:1px solid var(--line);}
+table.pano-table td{padding:9px 10px; border-bottom:1px solid var(--line); color:var(--text-1);}
+table.pano-table tr td:first-child{color:var(--text-0);}
+.row-btn{background:transparent; border:1px solid var(--line); color:var(--text-1); padding:4px 9px; border-radius:var(--radius); font-size:11.5px; margin-right:6px;}
+.row-btn:hover{border-color:var(--accent); color:var(--accent-text);}
+.row-btn.danger:hover{border-color:#c1391f; color:#ff9a7a;}
+.badge{font-size:10.5px; padding:2px 7px; border-radius:20px; border:1px solid var(--line);}
+.badge.visible{color:#9be09b; border-color:#3a5a3a;}
+.badge.hidden{color:var(--text-2);}
+
+/* ---------- Settings drawer ---------- */
+#settings-drawer{
+  position:fixed; top:56px; right:0; bottom:0; width:270px; z-index:1500;
+  background:var(--bg-1); border-left:1px solid var(--line); padding:20px;
+  transform:translateX(100%); transition:transform .2s ease;
+  overflow-y:auto;
+}
+#settings-drawer.open{transform:translateX(0);}
+#settings-drawer h3{font-family:var(--font-head); font-size:14px; margin-bottom:16px;}
+.set-row{margin-bottom:16px;}
+.set-row label{display:block; font-size:11.5px; color:var(--text-1); margin-bottom:6px;}
+.set-row input[type=color]{width:100%; height:32px; border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-0); padding:2px;}
+.set-row input[type=range]{width:100%;}
+.set-row select{width:100%; background:var(--bg-0); border:1px solid var(--line); color:var(--text-0); padding:7px; border-radius:var(--radius); font-size:12.5px;}
+
+::-webkit-scrollbar{width:9px;}
+::-webkit-scrollbar-thumb{background:var(--bg-3); border-radius:6px;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand"><span class="dot"></span>Panorama Atlas</div>
+  <div id="nav">
+    <button class="nav-btn active" data-view="map-view">Map</button>
+    <button class="nav-btn" data-view="donation-view">Support</button>
+    <button class="nav-btn" data-view="admin-view">Admin</button>
+  </div>
+  <div id="top-right">
+    <button class="icon-btn" id="settings-toggle" title="Customize appearance">&#9881;</button>
+  </div>
+</div>
+
+<!-- MAP VIEW -->
+<div class="view active" id="map-view">
+  <div id="map"></div>
+
+  <div id="filterbar">
+    <div class="filter-group years">
+      <div class="yfield"><label>Year from</label><input type="number" id="yearFrom" placeholder="e.g. 2018"></div>
+      <div class="yfield"><label>Year to</label><input type="number" id="yearTo" placeholder="e.g. 2025"></div>
+    </div>
+    <div class="filter-group">
+      <label>Country</label>
+      <select id="country-select"><option value="">All countries</option></select>
+    </div>
+    <button id="clear-filters">Clear</button>
+    <span id="result-count"></span>
+  </div>
+
+  <div id="layer-toggle">
+    <button class="active" data-layer="terrain">Terrain</button>
+    <button data-layer="satellite">Satellite</button>
+  </div>
+</div>
+
+<!-- PANORAMA OVERLAY -->
+<div id="pano-overlay">
+  <div id="panorama"></div>
+  <button id="pano-close">&times;</button>
+  <div id="pano-info">
+    <div class="t" id="pano-title"></div>
+    <div class="m" id="pano-meta"></div>
+  </div>
+</div>
+
+<!-- DONATION VIEW -->
+<div class="view" id="donation-view">
+  <div class="donation-wrap">
+    <h1>Help keep this atlas online</h1>
+    <p id="donation-p1" contenteditable="false">Panorama Atlas is an independent project — every high-resolution panorama here is shot, stitched and hosted by one person, and the storage and bandwidth bills add up quickly. If this project has been useful or enjoyable, a small contribution goes a long way toward keeping it free and ad-free for everyone.</p>
+    <p id="donation-p2" contenteditable="false">There's no pressure at all — the map stays fully open either way. Any support just means more time behind the camera and more places added to the atlas.</p>
+
+    <div class="donate-methods">
+      <div class="method-card">
+        <div>
+          <div class="name">PayPal</div>
+          <div class="val">onoprienko1988@gmail.com</div>
+        </div>
+        <button class="copy-btn" data-copy="onoprienko1988@gmail.com">Copy</button>
+      </div>
+      <div class="method-card">
+        <div>
+          <div class="name">Tinkoff</div>
+          <div class="val">5536 9138 2065 9536 13:38</div>
+        </div>
+        <button class="copy-btn" data-copy="5536913820659536">Copy</button>
+      </div>
+    </div>
+
+    <div class="newsletter-box">
+      <h3>Get notified about new panoramas</h3>
+      <p>One short email whenever a new location goes live. No spam, unsubscribe anytime.</p>
+      <div class="nl-row">
+        <input type="email" id="nl-email" placeholder="you@example.com">
+        <button id="nl-submit">Subscribe</button>
+      </div>
+      <div class="nl-status" id="nl-status">Subscribed — thank you.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN VIEW -->
+<div class="view" id="admin-view">
+  <div class="admin-wrap">
+    <h1>Admin</h1>
+    <p class="sub">Prototype only — no authentication wired up yet. Connect this to your real backend for production.</p>
+
+    <div class="admin-section">
+      <h2>Upload a new panorama</h2>
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <div class="upload-drop" id="uploadDrop">Click to choose a photo — GPS coordinates, capture date and country will be read from its EXIF data automatically.</div>
+      <div class="exif-result" id="exifResult"></div>
+    </div>
+
+    <div class="admin-section">
+      <h2>Donation page content</h2>
+      <button class="row-btn" id="toggleEdit">Enable inline editing</button>
+      <p style="font-size:12px;color:var(--text-2);margin-top:10px;">Click to toggle editing on the Support page paragraphs directly.</p>
+    </div>
+
+    <div class="admin-section">
+      <h2>Existing panoramas</h2>
+      <table class="pano-table">
+        <thead><tr><th>Name</th><th>Country</th><th>Year</th><th>Status</th><th></th></tr></thead>
+        <tbody id="panoTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS DRAWER -->
+<div id="settings-drawer">
+  <h3>Appearance</h3>
+  <div class="set-row"><label>Accent color</label><input type="color" id="set-accent" value="#c1591f"></div>
+  <div class="set-row"><label>Background tone</label><input type="color" id="set-bg" value="#1e1e1d"></div>
+  <div class="set-row"><label>Corner radius</label><input type="range" id="set-radius" min="0" max="16" value="3"></div>
+  <div class="set-row"><label>Heading font</label>
+    <select id="set-font">
+      <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+      <option value="'Inter', sans-serif">Inter</option>
+      <option value="Georgia, serif">Georgia</option>
+      <option value="'Courier New', monospace">Courier New</option>
+    </select>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+
+<script>
+/* ------------------------------------------------------------------ */
+/* Mock data — replace with your real API / database                   */
+/* ------------------------------------------------------------------ */
+let panoramas = [
+  {id:1, name:"Reine Harbour",        lat:67.9349, lng:13.0985, country:"Norway",     year:2023, visible:true,  img:"https://pannellum.org/images/alma.jpg"},
+  {id:2, name:"Shibuya Rooftop",      lat:35.6595, lng:139.7005, country:"Japan",     year:2024, visible:true,  img:"https://pannellum.org/images/bma-1.jpg"},
+  {id:3, name:"Vatnajökull Ice Cave", lat:64.4056, lng:-16.9314, country:"Iceland",   year:2022, visible:true,  img:"https://pannellum.org/images/cerro-toco-0.jpg"},
+  {id:4, name:"Sacred Valley",        lat:-13.3200, lng:-72.1000, country:"Peru",     year:2021, visible:true,  img:"https://pannellum.org/images/jfk.jpg"},
+  {id:5, name:"Milford Sound",        lat:-44.6714, lng:167.8990, country:"New Zealand", year:2024, visible:true, img:"https://pannellum.org/images/alma.jpg"},
+  {id:6, name:"Cinque Terre Cliffs",  lat:44.1281, lng:9.7128, country:"Italy",       year:2019, visible:true,  img:"https://pannellum.org/images/bma-1.jpg"},
+  {id:7, name:"Charyn Canyon",        lat:43.3510, lng:79.0680, country:"Kazakhstan", year:2020, visible:false, img:"https://pannellum.org/images/cerro-toco-0.jpg"},
+  {id:8, name:"Banff Lakeside",       lat:51.4968, lng:-115.9281, country:"Canada",   year:2025, visible:true,  img:"https://pannellum.org/images/jfk.jpg"}
+];
+
+/* ------------------------------------------------------------------ */
+/* Map setup                                                          */
+/* ------------------------------------------------------------------ */
+const map = new maplibregl.Map({
+  container:'map',
+  style:{
+    version:8,
+    sources:{
+      terrain:{ type:'raster', tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'], tileSize:256, attribution:'&copy; OpenStreetMap &copy; CARTO' },
+      satellite:{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize:256, attribution:'Tiles &copy; Esri' }
+    },
+    layers:[
+      { id:'terrain-layer', type:'raster', source:'terrain', layout:{visibility:'visible'} },
+      { id:'satellite-layer', type:'raster', source:'satellite', layout:{visibility:'none'} }
+    ]
+  },
+  center:[20,25],
+  zoom:2.4,
+  minZoom:2,
+  maxZoom:18,
+  attributionControl:true
+});
+map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
+map.scrollZoom.enable();
+map.keyboard.enable();
+map.dragPan.enable();
+
+document.querySelectorAll('#layer-toggle button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#layer-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const wantSat = btn.dataset.layer === 'satellite';
+    map.setLayoutProperty('terrain-layer', 'visibility', wantSat ? 'none' : 'visible');
+    map.setLayoutProperty('satellite-layer', 'visibility', wantSat ? 'visible' : 'none');
+  });
+});
+
+let activeMarkers = [];
+
+function renderMarkers(){
+  activeMarkers.forEach(m=>m.remove());
+  activeMarkers = [];
+
+  const yFrom = document.getElementById('yearFrom').value;
+  const yTo = document.getElementById('yearTo').value;
+  const country = document.getElementById('country-select').value;
+  let shown = 0;
+
+  panoramas.filter(p=>p.visible).forEach(p=>{
+    if(yFrom && p.year < parseInt(yFrom)) return;
+    if(yTo && p.year > parseInt(yTo)) return;
+    if(country && p.country !== country) return;
+    shown++;
+
+    const el = document.createElement('div');
+    el.className = 'geo-marker';
+
+    const popup = new maplibregl.Popup({offset:14, closeButton:true})
+      .setHTML(`<div class="pop-title">${p.name}</div><div class="pop-meta">${p.country} · ${p.year}</div><button class="pop-open" data-id="${p.id}">Open panorama</button>`);
+    popup.on('open', ()=>{
+      const btn = document.querySelector(`.pop-open[data-id="${p.id}"]`);
+      if(btn) btn.addEventListener('click', ()=>openPanorama(p));
+    });
+
+    const marker = new maplibregl.Marker({element:el})
+      .setLngLat([p.lng, p.lat])
+      .setPopup(popup)
+      .addTo(map);
+    activeMarkers.push(marker);
+  });
+  document.getElementById('result-count').textContent = shown + (shown===1 ? ' panorama' : ' panoramas');
+}
+
+function populateCountries(){
+  const sel = document.getElementById('country-select');
+  const countries = [...new Set(panoramas.filter(p=>p.visible).map(p=>p.country))].sort();
+  sel.innerHTML = '<option value="">All countries</option>' + countries.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+document.getElementById('yearFrom').addEventListener('input', renderMarkers);
+document.getElementById('yearTo').addEventListener('input', renderMarkers);
+document.getElementById('country-select').addEventListener('change', renderMarkers);
+document.getElementById('clear-filters').addEventListener('click', ()=>{
+  document.getElementById('yearFrom').value='';
+  document.getElementById('yearTo').value='';
+  document.getElementById('country-select').value='';
+  renderMarkers();
+});
+
+populateCountries();
+map.on('load', renderMarkers);
+
+/* ------------------------------------------------------------------ */
+/* Panorama viewer (Pannellum). Swap the image source for a tiled      */
+/* multi-resolution config to serve true gigapixel (155 x 10MP) scans. */
+/* ------------------------------------------------------------------ */
+let viewerInstance = null;
+function openPanorama(p){
+  document.getElementById('pano-overlay').classList.add('active');
+  document.getElementById('pano-title').textContent = p.name;
+  document.getElementById('pano-meta').textContent = `${p.country} · ${p.year}`;
+  if(viewerInstance) viewerInstance.destroy();
+  viewerInstance = pannellum.viewer('panorama', {
+    type:'equirectangular',
+    panorama:p.img,
+    autoLoad:true,
+    compass:false,
+    showZoomCtrl:true,
+    hfov:110
+  });
+}
+function closePanorama(){
+  document.getElementById('pano-overlay').classList.remove('active');
+  if(viewerInstance){ viewerInstance.destroy(); viewerInstance=null; }
+}
+document.getElementById('pano-close').addEventListener('click', closePanorama);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePanorama(); });
+
+/* ------------------------------------------------------------------ */
+/* Navigation between views                                            */
+/* ------------------------------------------------------------------ */
+document.querySelectorAll('.nav-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.view).classList.add('active');
+    if(btn.dataset.view === 'admin-view') renderAdminTable();
+    setTimeout(()=>map.resize(), 50);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Donation page — copy buttons + inline editing toggle                */
+/* ------------------------------------------------------------------ */
+document.querySelectorAll('.copy-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    navigator.clipboard.writeText(btn.dataset.copy);
+    const original = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(()=>btn.textContent = original, 1200);
+  });
+});
+
+let editing = false;
+document.getElementById('toggleEdit').addEventListener('click', function(){
+  editing = !editing;
+  document.getElementById('donation-p1').setAttribute('contenteditable', editing);
+  document.getElementById('donation-p2').setAttribute('contenteditable', editing);
+  this.textContent = editing ? 'Disable inline editing' : 'Enable inline editing';
+});
+
+document.getElementById('nl-submit').addEventListener('click', ()=>{
+  const email = document.getElementById('nl-email').value.trim();
+  if(!email || !email.includes('@')) return;
+  document.getElementById('nl-status').style.display = 'block';
+  document.getElementById('nl-email').value = '';
+});
+
+/* ------------------------------------------------------------------ */
+/* Admin — panorama table + EXIF-based upload                          */
+/* ------------------------------------------------------------------ */
+function renderAdminTable(){
+  const body = document.getElementById('panoTableBody');
+  body.innerHTML = panoramas.map(p=>`
+    <tr data-id="${p.id}">
+      <td>${p.name}</td>
+      <td>${p.country}</td>
+      <td>${p.year}</td>
+      <td><span class="badge ${p.visible?'visible':'hidden'}">${p.visible?'Visible':'Hidden'}</span></td>
+      <td>
+        <button class="row-btn toggle-visible" data-id="${p.id}">${p.visible?'Hide':'Unhide'}</button>
+        <button class="row-btn danger delete-pano" data-id="${p.id}">Delete</button>
+      </td>
+    </tr>`).join('');
+
+  body.querySelectorAll('.toggle-visible').forEach(b=>b.addEventListener('click', ()=>{
+    const id = parseInt(b.dataset.id);
+    panoramas = panoramas.map(p=> p.id===id ? {...p, visible:!p.visible} : p);
+    renderAdminTable(); populateCountries(); renderMarkers();
+  }));
+  body.querySelectorAll('.delete-pano').forEach(b=>b.addEventListener('click', ()=>{
+    const id = parseInt(b.dataset.id);
+    if(!confirm('Delete this panorama permanently?')) return;
+    panoramas = panoramas.filter(p=>p.id!==id);
+    renderAdminTable(); populateCountries(); renderMarkers();
+  }));
+}
+
+document.getElementById('uploadDrop').addEventListener('click', ()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const resultBox = document.getElementById('exifResult');
+
+  EXIF.getData(file, function(){
+    const lat = EXIF.getTag(this, 'GPSLatitude');
+    const lon = EXIF.getTag(this, 'GPSLongitude');
+    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+    const dateRaw = EXIF.getTag(this, 'DateTimeOriginal');
+
+    let latDec=null, lonDec=null, year='Unknown';
+    if(lat && lon){
+      latDec = (lat[0]+lat[1]/60+lat[2]/3600) * (latRef==='S'?-1:1);
+      lonDec = (lon[0]+lon[1]/60+lon[2]/3600) * (lonRef==='W'?-1:1);
+    }
+    if(dateRaw){ year = dateRaw.split(':')[0]; }
+
+    resultBox.style.display = 'block';
+    resultBox.innerHTML = `
+      <div><b>File:</b> ${file.name}</div>
+      <div><b>GPS coordinates:</b> ${latDec!==null ? latDec.toFixed(5)+', '+lonDec.toFixed(5) : 'Not found in EXIF'}</div>
+      <div><b>Capture date:</b> ${dateRaw || 'Not found in EXIF'} (year used: ${year})</div>
+      <div><b>Country:</b> ${latDec!==null ? 'Would be resolved via reverse-geocoding lookup' : 'Cannot resolve without GPS data'}</div>
+      <div style="margin-top:8px; color:var(--text-2);">In production this would create a new panorama entry, store the file, and add the marker to the map automatically.</div>
+    `;
+  });
+});
+
+renderAdminTable();
+
+/* ------------------------------------------------------------------ */
+/* Appearance settings drawer                                          */
+/* ------------------------------------------------------------------ */
+const root = document.documentElement.style;
+document.getElementById('settings-toggle').addEventListener('click', ()=>{
+  document.getElementById('settings-drawer').classList.toggle('open');
+});
+document.getElementById('set-accent').addEventListener('input', e=> root.setProperty('--accent', e.target.value));
+document.getElementById('set-bg').addEventListener('input', e=>{
+  root.setProperty('--bg-1', e.target.value);
+  root.setProperty('--bg-2', e.target.value);
+});
+document.getElementById('set-radius').addEventListener('input', e=> root.setProperty('--radius', e.target.value+'px'));
+document.getElementById('set-font').addEventListener('change', e=> root.setProperty('--font-head', e.target.value));
+</script>
+</body>
+</html>
