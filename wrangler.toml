@@ -1,6 +1,7 @@
-   name = "panorama-atlas"
-   compatibility_date = "2025-01-01"
+name = "panorama-atlas"
+pages_build_output_dir = "."
+compatibility_date = "2025-01-01"
 
-   [[r2_buckets]]
-   binding = "PANORAMA_BUCKET"
-   bucket_name = "panorama-atlas"
+[[r2_buckets]]
+binding = "PANORAMA_BUCKET"
+bucket_name = "panorama-atlas"
